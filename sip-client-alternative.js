@@ -31,6 +31,7 @@ class SipClientAlternative {
     return new Promise((resolve, reject) => {
       try {
         console.log(`[SIP-ALT] Initializing SIP client for ${this.config.sipUsername}@${this.config.sipServer}`);
+        console.log(`[SIP-ALT] Configuration: ${JSON.stringify(this.config, null, 2)}`);
         
         // Reset any existing state
         this.currentCallDialog = null;
@@ -855,22 +856,22 @@ class SipClientAlternative {
     }
     
     try {
-      // Extract exactly 160 bytes like your friend's code
-      let bufferPayload = this.audioBuffer?.slice(0, 160);
+      // MAJOR CHANGE: Force a fixed pattern for testing if audio is getting through
+      // This creates a distinctive pattern that should be audible if RTP is working
+      const bufferPayload = Buffer.alloc(160);
       
-      // Remove the used portion from the buffer
-      this.audioBuffer = this.audioBuffer.slice(Math.min(160, this.audioBuffer.length));
-      
-      // Skip if we have no audio
-      if (!bufferPayload || bufferPayload?.length === 0) {
-        return;
+      // Create a pattern that alternates between silence and loud tone
+      // This should be clearly audible even with codec issues
+      for (let i = 0; i < 160; i++) {
+        // Use a simple 1kHz test tone pattern that is definitely μ-law encoded properly
+        // These are G.711 μ-law values oscillating between max positive and negative
+        const testPattern = [0, 255, 0, 255, 0, 255, 0, 255];
+        bufferPayload[i] = testPattern[i % 8];
       }
       
-      // If buffer payload is smaller than 160 bytes, pad it
-      if (bufferPayload.length < 160) {
-        const tempBuffer = Buffer.alloc(160, 0x7F); // 0x7F is silence in μ-law (not 0xFF)
-        bufferPayload.copy(tempBuffer);
-        bufferPayload = tempBuffer;
+      // Drain the real buffer without using it for now
+      if (this.audioBuffer?.length > 0) {
+        this.audioBuffer = this.audioBuffer.slice(Math.min(160, this.audioBuffer.length));
       }
       
       // Increment timestamp by 160 samples (8000Hz * 20ms)

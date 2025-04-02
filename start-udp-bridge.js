@@ -1,6 +1,23 @@
 #!/usr/bin/env node
 // Start script for the UDP-based SIP to ElevenLabs bridge
 require('dotenv').config();
+console.log("Loading environment from .env file...");
+console.log("Current working directory:", process.cwd());
+
+// Check if environment variables are loaded correctly
+const envVars = [
+  "SIP_SERVER", "SIP_USERNAME", "SIP_PASSWORD", "SIP_PORT", "LOCAL_PORT", "ELEVENLABS_AGENT_ID", "PORT"
+];
+
+console.log("Environment variables check:");
+envVars.forEach(varName => {
+  if (process.env[varName]) {
+    console.log(`✓ ${varName} is defined: ${varName === "SIP_PASSWORD" ? "********" : process.env[varName]}`);
+  } else {
+    console.log(`✗ ${varName} is NOT defined!`);
+  }
+});
+
 const UdpElevenLabsAsteriskBridge = require('./udp-integration');
 
 async function main() {

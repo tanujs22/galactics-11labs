@@ -105,6 +105,15 @@ class UdpElevenLabsAsteriskBridge {
     try {
       console.log('Connecting to ElevenLabs...');
       
+      // Print out all relevant environment variables for debugging
+      console.log('******* ENVIRONMENT CONFIGURATION *******');
+      console.log(`SIP_SERVER: ${process.env.SIP_SERVER}`);
+      console.log(`SIP_USERNAME: ${process.env.SIP_USERNAME}`);
+      console.log(`SIP_PORT: ${process.env.SIP_PORT}`);
+      console.log(`LOCAL_PORT: ${process.env.LOCAL_PORT}`);
+      console.log(`ELEVENLABS_AGENT_ID: ${process.env.ELEVENLABS_AGENT_ID}`);
+      console.log('***************************************');
+      
       const agentId = process.env.ELEVENLABS_AGENT_ID || "gjaoeyb4H5TTw7NA0mub";
       console.log(`Using ElevenLabs Agent ID: ${agentId}`);
       

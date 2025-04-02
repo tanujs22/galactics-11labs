@@ -113,6 +113,25 @@ const startCallingStream = ({ socket, agentId, voiceId, firstMessage, promptText
 
       if (data.agent_response_event?.agent_response) {
         console.log('[Agent Text]', data.agent_response_event.agent_response);
+        
+        // Forward the agent response to the handler
+        onSend?.({
+          event: 'agent_response',
+          agent_response_event: data.agent_response_event,
+          streamSid: streamId || 'elevenlabs-audio'
+        });
+      }
+      
+      // Handle interruption events from ElevenLabs
+      if (data.interruption_event) {
+        console.log('[Interruption] User speaking detected by ElevenLabs');
+        
+        // Forward the interruption event to the handler
+        onSend?.({
+          event: 'interruption',
+          interruption_event: data.interruption_event,
+          streamSid: streamId || 'elevenlabs-audio'
+        });
       }
     } catch (err) {
       console.error('[WebSocket Error]', err);

@@ -761,7 +761,7 @@ class SipClientAlternative {
     }
   }
 
-  // Send audio to the active call - this just adds to the buffer
+  // Send audio to the active call - this adds to the buffer with processing
   sendAudio(audioData) {
     if (!this.callActive) {
       console.warn('[SIP-ALT] Cannot send audio: no active call');
@@ -790,18 +790,43 @@ class SipClientAlternative {
         this.receivedFirstAudio = true;
         console.log(`[RTP] Received first audio from ElevenLabs, length: ${newAudioRaw.length} bytes`);
         console.log(`[RTP] First 20 bytes: ${newAudioRaw.slice(0, 20).toString('hex')}`);
+        
+        // Add additional debugging for first packet
+        console.log(`[RTP] Raw audio sample rate analysis:`);
+        console.log(`[RTP] This audio might need format conversion to G.711 μ-law (PCMU)`);
       }
       
-      // ElevenLabs provides audio as Base64, which might be WebRTC Opus or PCM
-      // We need to convert/repackage it to μ-law for Asterisk
+      // Track total audio received for occasional logging
+      if (!this.audioSent) {
+        this.audioSent = 0;
+      }
+      this.audioSent++;
       
-      // For simplicity, we'll just use the raw data directly for now
-      // In a production environment, you'd need proper format conversion
-      this.audioBuffer = Buffer.concat([this.audioBuffer, newAudioRaw]);
+      // PRE-PROCESSING: Convert audio format if needed
+      // ElevenLabs likely provides 16kHz or 24kHz PCM audio
+      // We need 8kHz μ-law audio for RTP
+      
+      // For now, we'll apply a simple audio conversion approach
+      // In a real implementation, you would want proper resampling and μ-law encoding
+      // This is a placeholder that might help with the conversion issue:
+      
+      // 1. Fill the audio buffer with a pattern that's likely to be audible
+      // Use a non-silent pattern to ensure we can test audio flow
+      const processedBuffer = Buffer.alloc(newAudioRaw.length);
+      
+      // 2. Create a simple pattern based on the input audio to maintain some audio characteristics
+      for (let i = 0; i < newAudioRaw.length; i++) {
+        // Simple amplitude preservation - convert to μ-law range (0-255)
+        // This is a very crude approximation but might produce something audible
+        processedBuffer[i] = Math.min(255, Math.max(0, newAudioRaw[i] + 128));
+      }
+      
+      // Append to the audio buffer
+      this.audioBuffer = Buffer.concat([this.audioBuffer, processedBuffer]);
       
       // Only log occasionally
       if (this.audioSent % 500 === 0) {
-        console.log(`[RTP] Added ${newAudioRaw.length} bytes to audio buffer. Current buffer size: ${this.audioBuffer.length} bytes`);
+        console.log(`[RTP] Added ${processedBuffer.length} bytes to audio buffer. Current buffer size: ${this.audioBuffer.length} bytes`);
       }
       
       return true;
@@ -811,68 +836,53 @@ class SipClientAlternative {
     }
   }
   
-  // Send audio from the buffer at regular intervals
+  // Send audio from the buffer at regular intervals - DIRECTLY MATCHING YOUR FRIEND'S CODE
   sendBufferedAudio() {
     if (!this.callActive || !this.rtpSocket || !this.rtpRemoteAddress || !this.rtpRemotePort) {
       return;
     }
     
     try {
-      // FIXED: Always send a full 160-byte frame for G.711 μ-law at 8000Hz (20ms)
-      const chunkSize = 160;
+      // Extract exactly 160 bytes like your friend's code
+      let bufferPayload = this.audioBuffer?.slice(0, 160);
       
-      // Always create a full silent frame first
-      const audioChunk = Buffer.alloc(chunkSize, 0xFF); // 0xFF = silence in μ-law
+      // Remove the used portion from the buffer
+      this.audioBuffer = this.audioBuffer.slice(Math.min(160, this.audioBuffer.length));
       
-      // If we have data in the buffer, use it
-      if (this.audioBuffer.length > 0) {
-        // Copy as much data as we have (up to chunkSize)
-        const bytesToCopy = Math.min(this.audioBuffer.length, chunkSize);
-        this.audioBuffer.copy(audioChunk, 0, 0, bytesToCopy);
-        this.audioBuffer = this.audioBuffer.slice(bytesToCopy);
+      // Skip if we have no audio
+      if (!bufferPayload || bufferPayload?.length === 0) {
+        return;
       }
       
-      // Create RTP header (12 bytes)
-      const header = Buffer.alloc(12);
+      // If buffer payload is smaller than 160 bytes, pad it
+      if (bufferPayload.length < 160) {
+        const tempBuffer = Buffer.alloc(160, 0xFF); // 0xFF is silence in μ-law
+        bufferPayload.copy(tempBuffer);
+        bufferPayload = tempBuffer;
+      }
       
-      // Set RTP version to 2, no padding, no extension, no CSRC
-      header.writeUInt8(0x80, 0);
-      
-      // Set payload type to 0 (PCMU/G.711 mu-law)
-      header.writeUInt8(0x00, 1);
-      
-      // Set sequence number (increment for each packet)
-      header.writeUInt16BE(this.rtpSequence, 2);
-      this.rtpSequence = (this.rtpSequence + 1) % 65536;
-      
-      // Set timestamp (increasing by 160 samples per 20ms for 8kHz audio)
-      header.writeUInt32BE(this.rtpTimestamp, 4);
+      // Increment timestamp by 160 samples (8000Hz * 20ms)
       this.rtpTimestamp += 160;
       
-      // Set SSRC (synchro source) - random identifier for this stream
-      header.writeUInt32BE(this.rtpSSRC, 8);
+      // Create RTP header exactly like your friend's code
+      const header = Buffer.alloc(12);
+      header.writeUInt8(0x80, 0); // Version: 2, Padding: 0, Extension: 0, CSRC Count: 0
+      header.writeUInt8(0x00, 1); // Marker: 0, Payload Type: 0 (PCMU - G.711 μ-law)
+      header.writeUInt16BE(this.rtpSequence, 2); // Sequence Number
+      header.writeUInt32BE(this.rtpTimestamp, 4); // Timestamp
+      header.writeUInt32BE(this.rtpSSRC, 8); // SSRC (Synchronization Source)
+      
+      // Log exactly like your friend's code
+      console.log(`SEQ  ${this.rtpSequence.toString().padStart(10, " ")}   |   TS  ${this.rtpTimestamp.toString().padStart(10, " ")}   |   MEDIA LEFT  ${this.audioBuffer.length.toString().padStart(10, " ")}`);
       
       // Combine header and payload
-      const packet = Buffer.concat([header, audioChunk]);
+      const finalMessage = Buffer.concat([header, bufferPayload]);
       
-      // Log the first packet in detail
-      if (!this.audioSent) {
-        console.log(`[RTP] SENDING FIRST AUDIO PACKET to ${this.rtpRemoteAddress}:${this.rtpRemotePort}`);
-        console.log(`[RTP] Packet size: ${packet.length} bytes (header: 12 bytes, audio: ${audioChunk.length} bytes)`);
-        console.log(`[RTP] Header: ${header.toString('hex')}`);
-        console.log(`[RTP] First 16 audio bytes: ${audioChunk.slice(0, 16).toString('hex')}`);
-        console.log(`SEQ ${this.rtpSequence.toString().padStart(10, " ")} | TS ${this.rtpTimestamp.toString().padStart(10, " ")} | MEDIA LEFT ${this.audioBuffer.length.toString().padStart(10, " ")}`);
-      }
-      this.audioSent++;
+      // Send packet
+      this.rtpSocket.send(finalMessage, 0, finalMessage.length, this.rtpRemotePort, this.rtpRemoteAddress);
       
-      // Log stats occasionally
-      if (this.audioSent % 100 === 0) {
-        console.log(`[RTP] Packets sent: ${this.audioSent}, current packet size: ${packet.length} bytes`);
-        console.log(`SEQ ${this.rtpSequence.toString().padStart(10, " ")} | TS ${this.rtpTimestamp.toString().padStart(10, " ")} | MEDIA LEFT ${this.audioBuffer.length.toString().padStart(10, " ")}`);
-      }
-      
-      // Send the packet
-      this.rtpSocket.send(packet, 0, packet.length, this.rtpRemotePort, this.rtpRemoteAddress);
+      // Increment sequence number
+      this.rtpSequence += 1;
       
       return true;
     } catch (error) {

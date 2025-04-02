@@ -165,6 +165,15 @@ class UdpElevenLabsAsteriskBridge {
             } else if (responsePayload.event === 'agent_response') {
               // Log the agent's text response
               console.log(`[ElevenLabs Agent] ${responsePayload.agent_response_event?.agent_response || '[No text]'}`);
+            } else if (responsePayload.event === 'interruption') {
+              // Handle interruption event from ElevenLabs
+              console.log('[ElevenLabs] Interruption detected - user is speaking');
+              
+              // Clear the audio buffer in the SIP client to stop playback immediately
+              if (this.sipClient && this.sipClient.audio) {
+                console.log('[BRIDGE] Clearing audio buffer due to interruption');
+                this.sipClient.audio = Buffer.alloc(0);
+              }
             } else if (responsePayload.event !== 'ping') {
               // Log other non-ping events
               console.log(`[ElevenLabs Event] ${responsePayload.event}`);

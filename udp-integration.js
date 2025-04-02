@@ -3,7 +3,8 @@ const SipClientAlternative = require('./sip-client-alternative');
 const { startCallingStream } = require('./calling');
 require('dotenv').config();
 
-console.log = () => { }
+// Re-enable console logs
+// console.log = () => { }
 
 class UdpElevenLabsAsteriskBridge {
   constructor() {

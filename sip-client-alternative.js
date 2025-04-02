@@ -540,7 +540,10 @@ class SipClientAlternative {
       `m=audio ${rtpPort} RTP/AVP 0`,  // Only offer PCMU/G.711 mu-law to simplify
       'a=rtpmap:0 PCMU/8000',
       'a=ptime:20',
-      'a=sendrecv'
+      'a=maxptime:150',
+      'a=sendrecv',
+      'a=rtcp:5082',  // RTCP on RTP port + 2
+      `a=candidate:1 1 UDP 2130706431 ${localIP} ${rtpPort} typ host`  // Add candidate for ICE
     ].join('\r\n') + '\r\n';
   }
 
@@ -873,10 +876,10 @@ class SipClientAlternative {
       // Increment timestamp by 160 samples (8000Hz * 20ms)
       this.rtpTimestamp += 160;
       
-      // Create RTP header exactly like your friend's code
+      // Create RTP header with high-volume marker
       const header = Buffer.alloc(12);
       header.writeUInt8(0x80, 0); // Version: 2, Padding: 0, Extension: 0, CSRC Count: 0
-      header.writeUInt8(0x00, 1); // Marker: 0, Payload Type: 0 (PCMU - G.711 μ-law)
+      header.writeUInt8(0x80, 1); // Marker: 1 (important!), Payload Type: 0 (PCMU - G.711 μ-law)
       header.writeUInt16BE(this.rtpSequence, 2); // Sequence Number
       header.writeUInt32BE(this.rtpTimestamp, 4); // Timestamp
       header.writeUInt32BE(this.rtpSSRC, 8); // SSRC (Synchronization Source)

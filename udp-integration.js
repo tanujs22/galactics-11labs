@@ -135,7 +135,21 @@ class UdpElevenLabsAsteriskBridge {
               
               // Send the audio directly to Asterisk without any processing or logging
               // This is the critical real-time audio path
-              this.sipClient.sendAudio(audioPayload);
+              if (this.elAudioCount % 100 === 0) {
+                console.log(`[BRIDGE] Sending audio packet #${this.elAudioCount} to SIP client`);
+              }
+              
+              // Log the first few packets in detail to help with debugging
+              if (this.elAudioCount <= 5) {
+                const rawAudio = Buffer.from(audioPayload, 'base64');
+                console.log(`[BRIDGE] Audio packet #${this.elAudioCount} - Length: ${rawAudio.length} bytes`);
+                console.log(`[BRIDGE] Audio packet #${this.elAudioCount} - First 20 bytes: ${rawAudio.slice(0, 20).toString('hex')}`);
+              }
+              
+              const success = this.sipClient.sendAudio(audioPayload);
+              if (!success && this.elAudioCount % 10 === 0) {
+                console.error(`[BRIDGE] Failed to send audio packet #${this.elAudioCount} to SIP client`);
+              }
             } else if (responsePayload.event === 'agent_response') {
               // Log the agent's text response
               console.log(`[ElevenLabs Agent] ${responsePayload.agent_response_event?.agent_response || '[No text]'}`);

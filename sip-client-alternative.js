@@ -324,10 +324,20 @@ class SipClientAlternative {
                     this.rtpRemotePort = parseInt(parts[1], 10);
                     console.log(`[SIP-ALT] Found remote RTP port: ${this.rtpRemotePort}`);
                   }
+                  
+                  // Check if the payload type includes 0 (PCMU/G.711 μ-law)
+                  const payloadTypes = parts.slice(3);
+                  console.log(`[SIP-ALT] Supported payload types: ${payloadTypes.join(', ')}`);
+                  if (!payloadTypes.includes('0')) {
+                    console.warn(`[SIP-ALT] WARNING: Remote endpoint doesn't explicitly support G.711 μ-law (PCMU/payload type 0)`);
+                  }
                 }
                 
                 if (this.rtpRemoteAddress && this.rtpRemotePort) {
                   console.log(`[SIP-ALT] Ready to send audio to ${this.rtpRemoteAddress}:${this.rtpRemotePort}`);
+                } else {
+                  console.error(`[SIP-ALT] CRITICAL ERROR: Failed to extract remote RTP address/port from SDP!`);
+                  console.error(`[SIP-ALT] This will prevent audio from being sent correctly.`);
                 }
               } catch (err) {
                 console.error('[SIP-ALT] Error parsing SDP:', err);
@@ -632,6 +642,12 @@ class SipClientAlternative {
         console.error('[RTP] Socket error:', err);
       });
       
+      // Log when bound to help with debugging
+      this.rtpSocket.on('listening', () => {
+        const address = this.rtpSocket.address();
+        console.log(`[RTP] CRITICAL: Socket bound and LISTENING on ${address.address}:${address.port}`);
+      });
+      
       this.rtpSocket.on('message', (msg, rinfo) => {
         try {
           // Always log the first few packets
@@ -802,31 +818,24 @@ class SipClientAlternative {
       }
       this.audioSent++;
       
-      // PRE-PROCESSING: Convert audio format if needed
-      // ElevenLabs likely provides 16kHz or 24kHz PCM audio
-      // We need 8kHz μ-law audio for RTP
+      // ElevenLabs is already sending μ-law 8000Hz - no conversion needed
+      // Just use the raw audio directly
       
-      // For now, we'll apply a simple audio conversion approach
-      // In a real implementation, you would want proper resampling and μ-law encoding
-      // This is a placeholder that might help with the conversion issue:
-      
-      // 1. Fill the audio buffer with a pattern that's likely to be audible
-      // Use a non-silent pattern to ensure we can test audio flow
-      const processedBuffer = Buffer.alloc(newAudioRaw.length);
-      
-      // 2. Create a simple pattern based on the input audio to maintain some audio characteristics
-      for (let i = 0; i < newAudioRaw.length; i++) {
-        // Simple amplitude preservation - convert to μ-law range (0-255)
-        // This is a very crude approximation but might produce something audible
-        processedBuffer[i] = Math.min(255, Math.max(0, newAudioRaw[i] + 128));
+      // Log the first packet in detail to confirm format
+      if (!this.receivedFirstDetailedAudio) {
+        this.receivedFirstDetailedAudio = true;
+        console.log(`[RTP] IMPORTANT - First detailed ElevenLabs audio analysis:`);
+        console.log(`[RTP] Raw audio length: ${newAudioRaw.length} bytes`);
+        console.log(`[RTP] First 20 bytes: ${newAudioRaw.slice(0, 20).toString('hex')}`);
+        console.log(`[RTP] Assuming this is already μ-law 8000Hz from ElevenLabs`);
       }
       
-      // Append to the audio buffer
-      this.audioBuffer = Buffer.concat([this.audioBuffer, processedBuffer]);
+      // Append to the audio buffer directly - no conversion needed
+      this.audioBuffer = Buffer.concat([this.audioBuffer, newAudioRaw]);
       
       // Only log occasionally
       if (this.audioSent % 500 === 0) {
-        console.log(`[RTP] Added ${processedBuffer.length} bytes to audio buffer. Current buffer size: ${this.audioBuffer.length} bytes`);
+        console.log(`[RTP] Added ${newAudioRaw.length} bytes to audio buffer. Current buffer size: ${this.audioBuffer.length} bytes`);
       }
       
       return true;
@@ -856,7 +865,7 @@ class SipClientAlternative {
       
       // If buffer payload is smaller than 160 bytes, pad it
       if (bufferPayload.length < 160) {
-        const tempBuffer = Buffer.alloc(160, 0xFF); // 0xFF is silence in μ-law
+        const tempBuffer = Buffer.alloc(160, 0x7F); // 0x7F is silence in μ-law (not 0xFF)
         bufferPayload.copy(tempBuffer);
         bufferPayload = tempBuffer;
       }
@@ -878,8 +887,15 @@ class SipClientAlternative {
       // Combine header and payload
       const finalMessage = Buffer.concat([header, bufferPayload]);
       
-      // Send packet
-      this.rtpSocket.send(finalMessage, 0, finalMessage.length, this.rtpRemotePort, this.rtpRemoteAddress);
+      // Send packet with more detailed logging
+      this.rtpSocket.send(finalMessage, 0, finalMessage.length, this.rtpRemotePort, this.rtpRemoteAddress, (err) => {
+        if (err) {
+          console.error(`[RTP] ERROR sending packet to ${this.rtpRemoteAddress}:${this.rtpRemotePort}: ${err.message}`);
+        } else if (this.rtpSequence % 100 === 0) {
+          // Log every 100 packets to confirm successful transmission
+          console.log(`[RTP] Successfully sent packet #${this.rtpSequence} to ${this.rtpRemoteAddress}:${this.rtpRemotePort}`);
+        }
+      });
       
       // Increment sequence number
       this.rtpSequence += 1;

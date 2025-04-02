@@ -94,7 +94,7 @@ class SipClientAlternative {
         }
       }
     }
-    return '127.0.0.1';
+    return '206.189.237.138';
   }
 
   // Real SIP registration method

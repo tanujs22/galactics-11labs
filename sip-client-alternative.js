@@ -72,7 +72,7 @@ class SipClientAlternative {
         console.log('[SIP-ALT] Attempting to register with SIP server');
         this.register()
           .then(() => {
-            console.log('[SIP-ALT] Registration successful');
+            console.log('[SIP-ALT] Registration successful - SIP connection established');
             resolve(true);
           })
           .catch(err => {
@@ -193,7 +193,7 @@ class SipClientAlternative {
               }
             }, (authResponse) => {
               if (authResponse.status >= 200 && authResponse.status < 300) {
-                console.log('[SIP-ALT] Successfully registered with SIP server');
+                console.log('[SIP-ALT] Successfully registered with SIP server - SIP registration complete');
                 this.registered = true;
                 this.callId = callId;
                 resolve(true);
@@ -204,7 +204,7 @@ class SipClientAlternative {
             });
           } else if (response.status >= 200 && response.status < 300) {
             // Registration successful on first try
-            console.log('[SIP-ALT] Successfully registered with SIP server');
+            console.log('[SIP-ALT] Successfully registered with SIP server - Connection ready');
             this.registered = true;
             this.callId = callId;
             resolve(true);
@@ -440,6 +440,7 @@ class SipClientAlternative {
         this.currentCallDialog = null;
 
         // Notify about call ending
+        console.log('[SIP-ALT] Call disconnected from ElevenLabs');
         if (this.onCallEnded) {
           this.onCallEnded();
         }
@@ -464,6 +465,7 @@ class SipClientAlternative {
         this.currentCallDialog = null;
 
         // Notify about call ending
+        console.log('[SIP-ALT] Call disconnected from ElevenLabs');
         if (this.onCallEnded) {
           this.onCallEnded();
         }
@@ -681,7 +683,7 @@ class SipClientAlternative {
               header.writeUInt32BE(this.rtpTimestamp, 4); // Timestamp
               header.writeUInt32BE(this.ssrc, 8); // SSRC (Synchronization Source)
 
-              console.log(`SEQ  ${this.rtpSequence.toString().padStart(10, " ")}   |   TS  ${this.rtpTimestamp.toString().padStart(10, " ")}   |   MEDIA LEFT  ${this.audio.length.toString().padStart(10, " ")}`);
+              // Detailed sequence logging removed as requested
 
               const finalMessage = Buffer.concat([header, bufferPayload]);
               this.rtpSocket.send(finalMessage, rinfo.port, rinfo.address);
@@ -763,6 +765,9 @@ class SipClientAlternative {
           if (this.onAudioReceived) {
             console.log(`[RTP] Sending ${payload.length} bytes to ElevenLabs (packet #${this.rtpPacketsReceived})`);
             this.onAudioReceived(base64Audio);
+            if (this.rtpPacketsReceived % 50 === 0) {
+              console.log('[SIP-ALT] Audio streaming active - ElevenLabs connection healthy');
+            }
           } else {
             console.warn('[RTP] Audio received but no onAudioReceived handler');
           }
@@ -851,6 +856,7 @@ class SipClientAlternative {
         console.log(`[RTP] Raw audio length: ${newAudioRaw.length} bytes`);
         console.log(`[RTP] First 20 bytes: ${newAudioRaw.slice(0, 20).toString('hex')}`);
         console.log(`[RTP] Assuming this is already μ-law 8000Hz from ElevenLabs`);
+        console.log('[SIP-ALT] ElevenLabs audio stream connected - starting transmission');
 
         // Play a short test tone at the beginning to confirm audio path
         const testTone = Buffer.alloc(160);
@@ -893,6 +899,8 @@ class SipClientAlternative {
         resolve(true);
         return;
       }
+      
+      console.log('[SIP-ALT] Ending call with ElevenLabs');
 
       try {
         console.log('[SIP-ALT] Ending call with dialog:', this.currentCallDialog.callId);

@@ -1,0 +1,24 @@
+{
+  "name": "sip-ua",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "start-udp-bridge.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node start-udp-bridge.js",
+    "udp": "node udp-integration.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "morgan": "^1.10.0",
+    "sip": "^0.0.6",
+    "sip.js": "^0.21.2",
+    "web-audio-api": "^0.2.2",
+    "ws": "^8.18.1"
+  }
+}

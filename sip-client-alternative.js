@@ -827,8 +827,6 @@ class SipClientAlternative {
 
       this.audio = Buffer.concat([this.audio, newAudioRaw]);
 
-      console.error("total audio : ", this.audio.length);
-
       // Log first packet details
       if (!this.receivedFirstAudio) {
         this.receivedFirstAudio = true;

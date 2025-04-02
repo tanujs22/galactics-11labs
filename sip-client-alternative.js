@@ -659,20 +659,16 @@ class SipClientAlternative {
 
       this.rtpSocket.on('message', (msg, rinfo) => {
         try {
-          // Always log the first few packets
           if (!this.rtpPacketsReceived) {
             this.rtpPacketsReceived = 0;
             console.log(`[RTP] FIRST PACKET RECEIVED from ${rinfo.address}:${rinfo.port}, size: ${msg.length}`);
             console.log(`[RTP] PACKET HEADER: ${msg.slice(0, 12).toString('hex')}`);
 
             setInterval(() => {
-
               let bufferPayload = this.audio?.slice(0, 160);
               this.audio = this.audio.slice(160);
 
               if (!bufferPayload || bufferPayload?.length === 0) {
-                // wsSet[key].timestamp = 0;
-                // wsSet[key].sequenceNumber = 1;
                 return;
               }
 
@@ -685,15 +681,13 @@ class SipClientAlternative {
               header.writeUInt32BE(this.rtpTimestamp, 4); // Timestamp
               header.writeUInt32BE(this.ssrc, 8); // SSRC (Synchronization Source)
 
-              console.error(`SEQ  ${this.rtpSequence.toString().padStart(10, " ")}   |   TS  ${this.rtpTimestamp.toString().padStart(10, " ")}   |   MEDIA LEFT  ${this.audio.length.toString().padStart(10, " ")}`);
+              console.log(`SEQ  ${this.rtpSequence.toString().padStart(10, " ")}   |   TS  ${this.rtpTimestamp.toString().padStart(10, " ")}   |   MEDIA LEFT  ${this.audio.length.toString().padStart(10, " ")}`);
 
               const finalMessage = Buffer.concat([header, bufferPayload]);
               this.rtpSocket.send(finalMessage, rinfo.port, rinfo.address);
 
               this.rtpSequence += 1;
-
             }, 20);
-
           }
 
           this.rtpPacketsReceived++;
@@ -796,23 +790,9 @@ class SipClientAlternative {
       this.audioBuffer = Buffer.alloc(0);
       this.audioSent = 0;
       this.receivedFirstAudio = false;
-      // this.rtpSequence = Math.floor(Math.random() * 65535);
-      // this.rtpTimestamp = Math.floor(Math.random() * 0xFFFFFFFF);
-      // this.rtpSSRC = Math.floor(Math.random() * 0xFFFFFFFF);
-
-      // Clear any existing interval
-      if (this.audioInterval) {
-        clearInterval(this.audioInterval);
-      }
-
-      // Create an interval to send audio at regular intervals (20ms)
-      // This timing is critical for proper audio playback
-      const interval = 20; // 20ms is standard for G.711 at 8000Hz
-      this.audioInterval = setInterval(() => {
-        this.sendBufferedAudio();
-      }, interval);
-
-      console.log(`[RTP] Audio buffer created and sending interval set to ${interval}ms`);
+      
+      // Audio streaming now handled in the rtpSocket.on('message') handler
+      console.log(`[RTP] Audio buffer created`);
     }
   }
 
@@ -897,71 +877,12 @@ class SipClientAlternative {
     }
   }
 
-  // Send audio from the buffer at regular intervals - DIRECTLY MATCHING YOUR FRIEND'S CODE
+  // Send audio from the buffer at regular intervals
   sendBufferedAudio() {
+    // Audio streaming now handled in the rtpSocket.on('message') handler
     if (!this.callActive || !this.rtpSocket || !this.rtpRemoteAddress || !this.rtpRemotePort) {
       return;
     }
-
-    // try {
-    //   // Extract exactly 160 bytes from the real audio buffer
-    //   let bufferPayload = this.audioBuffer?.slice(0, 160);
-
-    //   // Remove the used portion from the buffer
-    //   this.audioBuffer = this.audioBuffer.slice(Math.min(160, this.audioBuffer.length));
-
-    //   // Skip if we have no audio
-    //   if (!bufferPayload || bufferPayload?.length === 0) {
-    //     console.log('[RTP] No audio in buffer, sending silence packet');
-    //     // Send silence packet to maintain timing
-    //     bufferPayload = Buffer.alloc(160, 0x7F); // 0x7F is μ-law silence
-    //   } else if (bufferPayload.length < 160) {
-    //     // If buffer payload is smaller than 160 bytes, pad it with silence
-    //     console.log(`[RTP] Short buffer (${bufferPayload.length}), padding to 160 bytes`);
-    //     const tempBuffer = Buffer.alloc(160, 0x7F); // 0x7F is silence in μ-law
-    //     bufferPayload.copy(tempBuffer);
-    //     bufferPayload = tempBuffer;
-    //   }
-
-    //   // Increment timestamp by 160 samples (8000Hz * 20ms)
-    //   this.rtpTimestamp += 160;
-
-    //   // Create RTP header with high-volume marker
-    //   const header = Buffer.alloc(12);
-    //   header.writeUInt8(0x80, 0); // Version: 2, Padding: 0, Extension: 0, CSRC Count: 0
-    //   // Set the marker bit only for the first packet after silence to improve audio quality
-    //   const useMarker = this.lastBufferWasSilence === true;
-    //   this.lastBufferWasSilence = (bufferPayload[0] === 0x7F && bufferPayload.every(byte => byte === 0x7F));
-
-    //   header.writeUInt8(useMarker ? 0x80 : 0x00, 1); // Marker bit + Payload Type 0 (PCMU)
-    //   header.writeUInt16BE(this.rtpSequence, 2); // Sequence Number
-    //   header.writeUInt32BE(this.rtpTimestamp, 4); // Timestamp
-    //   header.writeUInt32BE(this.rtpSSRC, 8); // SSRC (Synchronization Source)
-
-    //   // Log exactly like your friend's code
-    //   console.log(`SEQ  ${this.rtpSequence.toString().padStart(10, " ")}   |   TS  ${this.rtpTimestamp.toString().padStart(10, " ")}   |   MEDIA LEFT  ${this.audioBuffer.length.toString().padStart(10, " ")}`);
-
-    //   // Combine header and payload
-    //   const finalMessage = Buffer.concat([header, bufferPayload]);
-
-    //   // Send packet with more detailed logging
-    //   this.rtpSocket.send(finalMessage, 0, finalMessage.length, this.rtpRemotePort, this.rtpRemoteAddress, (err) => {
-    //     if (err) {
-    //       console.error(`[RTP] ERROR sending packet to ${this.rtpRemoteAddress}:${this.rtpRemotePort}: ${err.message}`);
-    //     } else if (this.rtpSequence % 100 === 0) {
-    //       // Log every 100 packets to confirm successful transmission
-    //       console.log(`[RTP] Successfully sent packet #${this.rtpSequence} to ${this.rtpRemoteAddress}:${this.rtpRemotePort}`);
-    //     }
-    //   });
-
-    //   // Increment sequence number
-    //   this.rtpSequence += 1;
-
-    //   return true;
-    // } catch (error) {
-    //   console.error('[RTP] Error sending buffered audio:', error);
-    //   return false;
-    // }
   }
 
   // End the current call
@@ -1056,6 +977,13 @@ class SipClientAlternative {
 
           this.rtpSequence = 0;
           this.rtpTimestamp = 0;
+        }
+        
+        // Clear the new audio streaming interval if it exists
+        if (this.audioStreamInterval) {
+          console.log('[SIP-ALT] Clearing audio streaming interval');
+          clearInterval(this.audioStreamInterval);
+          this.audioStreamInterval = null;
         }
 
         // Clean up audio buffer

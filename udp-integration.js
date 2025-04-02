@@ -165,7 +165,7 @@ class UdpElevenLabsAsteriskBridge {
             } else if (responsePayload.event === 'agent_response') {
               // Log the agent's text response
               console.log(`[ElevenLabs Agent] ${responsePayload.agent_response_event?.agent_response || '[No text]'}`);
-            } else if (responsePayload.event === 'interruption_event') {
+            } else if (responsePayload.event === 'interruption') {
               // Handle interruption event from ElevenLabs
               console.log('[ElevenLabs] Interruption detected - user is speaking');
               

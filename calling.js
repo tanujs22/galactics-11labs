@@ -44,7 +44,7 @@ const startCallingStream = ({ socket, agentId, voiceId, firstMessage, promptText
 
       // Log all events from ElevenLabs (omit large data)
       // Clone the data to avoid modifying the original
-      const logData = { ...data };
+      const logData = structuredClone(data);
       
       // Omit large base64 data from logs
       if (logData.audio_event?.audio_base_64) {
@@ -90,7 +90,10 @@ const startCallingStream = ({ socket, agentId, voiceId, firstMessage, promptText
         if (data.streamId) {
           streamId = data.streamId;
         }
-        
+
+        // console.error("data.audio_event.audio_base_64 : ", data.audio_event.audio_base_64);
+        // console.error("data.audio_event.audio_base_64 : ", Buffer.from(data.audio_event.audio_base_64, "base64").length);
+
         // Pass along the audio to the client
         onSend?.({
           event: 'media',

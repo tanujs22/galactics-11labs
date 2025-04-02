@@ -3,6 +3,8 @@ const SipClientAlternative = require('./sip-client-alternative');
 const { startCallingStream } = require('./calling');
 require('dotenv').config();
 
+console.log = () => { }
+
 class UdpElevenLabsAsteriskBridge {
   constructor() {
     // Print banner to indicate which implementation is running
@@ -20,7 +22,7 @@ class UdpElevenLabsAsteriskBridge {
     try {
       // Initialize SIP client
       console.log('Initializing UDP SIP client...');
-      
+
       // Environment info
       console.log(`SIP Server: ${process.env.SIP_SERVER || 'default'}`);
       console.log(`Local Port: ${process.env.LOCAL_PORT || '5080'}`);
@@ -104,7 +106,7 @@ class UdpElevenLabsAsteriskBridge {
   connectToElevenLabs() {
     try {
       console.log('Connecting to ElevenLabs...');
-      
+
       // Print out all relevant environment variables for debugging
       console.log('******* ENVIRONMENT CONFIGURATION *******');
       console.log(`SIP_SERVER: ${process.env.SIP_SERVER}`);
@@ -222,6 +224,8 @@ class UdpElevenLabsAsteriskBridge {
       
       if (this.elevenlabsConnection.closeSession) {
         this.elevenlabsConnection.closeSession();
+        this.sipClient.rtpSequence = 0;
+        this.sipClient.rtpTimestamp = 0;
       }
       
       this.elevenlabsConnection = null;
@@ -266,6 +270,8 @@ class UdpElevenLabsAsteriskBridge {
       
       // End the SIP call
       await this.sipClient.endCall();
+      this.sipClient.rtpSequence = 0;
+      this.sipClient.rtpTimestamp = 0;
       
       console.log('Call ended');
       return true;

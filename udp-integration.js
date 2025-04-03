@@ -38,6 +38,12 @@ class UdpElevenLabsAsteriskBridge {
     // Set up to forward INVITE to SessionManager
     this.listenerClient.onCallReceived = async (invite) => {
       const callId = invite.headers['call-id'];
+    
+      if (this.sessionManager.sessions.has(callId)) {
+        console.warn(`[BRIDGE] Duplicate callId ${callId} received by listener. Ignoring.`);
+        return;
+      }
+    
       const extension = invite.headers.to.uri.match(/\d+/)?.[0] || '7001';
       console.log(`[BRIDGE] Incoming call received. Call-ID: ${callId}, Extension: ${extension}`);
       await this.sessionManager.handleNewCall({ callId, extension });

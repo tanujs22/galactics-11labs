@@ -6,7 +6,7 @@ const os = require('os');
 require('dotenv').config();
 
 class SipClientAlternative {
-  constructor( { overridePort } = {} ) {
+  constructor( { overridePort, isListener = false } = {} ) {
     this.config = {
       sipServer: process.env.SIP_SERVER || 'your-asterisk-server.com',
       sipUsername: process.env.SIP_USERNAME || '7001', // Using 7001 instead of 6001
@@ -19,6 +19,7 @@ class SipClientAlternative {
     this.rtpSequence = 0;
     this.rtpTimestamp = 0;
     this.ssrc = Math.floor(Math.random() * 0xffffffff);
+    this.isListener = isListener;
 
     this.callId = null;
     this.registered = false;
@@ -261,6 +262,13 @@ class SipClientAlternative {
       console.log('========================');
 
       // First, always send a 100 Trying for INVITE to let the server know we're processing
+
+      if (request.method === 'INVITE' && this.isListener) {
+        console.log('[SIP-ALT] INVITE received on listener client - forwarding only');
+        this.onCallReceived?.(request);
+        return;
+      }
+      
       if (request.method === 'INVITE') {
         // First send 100 Trying to prevent retransmissions
         console.log('[SIP-ALT] Sending 100 Trying response');

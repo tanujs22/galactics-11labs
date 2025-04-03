@@ -19,7 +19,7 @@ class UdpElevenLabsAsteriskBridge {
       agentId: AGENT_ID
     });
 
-    this.listenerClient = new SipClientAlternative({ overridePort: BASE_PORT - 1 });
+    this.listenerClient = new SipClientAlternative( { overridePort: BASE_PORT - 1, isListener: true } );
   }
 
   async initialize() {
@@ -57,26 +57,6 @@ class UdpElevenLabsAsteriskBridge {
     console.log('[SHUTDOWN] All sessions and listener client shut down');
   }
 }
-
-// async function main() {
-//   const bridge = new UdpElevenLabsAsteriskBridge();
-
-//   process.on('SIGINT', async () => {
-//     console.log('[SHUTDOWN] Caught SIGINT, shutting down...');
-//     await bridge.shutdown();
-//     process.exit(0);
-//   });
-
-//   const initialized = await bridge.initialize();
-//   if (!initialized) {
-//     console.error('[FATAL] Initialization failed');
-//     process.exit(1);
-//   }
-
-//   console.log('[READY] Bridge initialized. Awaiting incoming calls...');
-// }
-
-
 
 
 module.exports = UdpElevenLabsAsteriskBridge;

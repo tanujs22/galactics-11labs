@@ -74,11 +74,20 @@ async function main() {
   }
 
   console.log('[READY] Bridge initialized. Awaiting incoming calls...');
-
-  setInterval(() => {}, 1000); // keep Node alive
 }
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('[FATAL ERROR] uncaught error:', err);
+    process.exit(1);
+  });
+}
+
 
 main().catch((err) => {
   console.error('[FATAL ERROR] uncaught error:', err);
   process.exit(1);
 });
+
+
+module.exports = UdpElevenLabsAsteriskBridge;

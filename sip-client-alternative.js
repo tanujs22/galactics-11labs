@@ -6,13 +6,13 @@ const os = require('os');
 require('dotenv').config();
 
 class SipClientAlternative {
-  constructor() {
+  constructor( { overridePort } = {} ) {
     this.config = {
       sipServer: process.env.SIP_SERVER || 'your-asterisk-server.com',
       sipUsername: process.env.SIP_USERNAME || '7001', // Using 7001 instead of 6001
       sipPassword: process.env.SIP_PASSWORD || 'password',
       sipPort: parseInt(process.env.SIP_PORT || '5060', 10),
-      localPort: parseInt(process.env.LOCAL_PORT || '5080', 10)
+      localPort: overridePort || parseInt(process.env.LOCAL_PORT || '5080', 10)
     };
 
     this.audio = Buffer.alloc(0);

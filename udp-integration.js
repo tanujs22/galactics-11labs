@@ -58,36 +58,25 @@ class UdpElevenLabsAsteriskBridge {
   }
 }
 
-async function main() {
-  const bridge = new UdpElevenLabsAsteriskBridge();
+// async function main() {
+//   const bridge = new UdpElevenLabsAsteriskBridge();
 
-  process.on('SIGINT', async () => {
-    console.log('[SHUTDOWN] Caught SIGINT, shutting down...');
-    await bridge.shutdown();
-    process.exit(0);
-  });
+//   process.on('SIGINT', async () => {
+//     console.log('[SHUTDOWN] Caught SIGINT, shutting down...');
+//     await bridge.shutdown();
+//     process.exit(0);
+//   });
 
-  const initialized = await bridge.initialize();
-  if (!initialized) {
-    console.error('[FATAL] Initialization failed');
-    process.exit(1);
-  }
+//   const initialized = await bridge.initialize();
+//   if (!initialized) {
+//     console.error('[FATAL] Initialization failed');
+//     process.exit(1);
+//   }
 
-  console.log('[READY] Bridge initialized. Awaiting incoming calls...');
-}
-
-if (require.main === module) {
-  main().catch((err) => {
-    console.error('[FATAL ERROR] uncaught error:', err);
-    process.exit(1);
-  });
-}
+//   console.log('[READY] Bridge initialized. Awaiting incoming calls...');
+// }
 
 
-main().catch((err) => {
-  console.error('[FATAL ERROR] uncaught error:', err);
-  process.exit(1);
-});
 
 
 module.exports = UdpElevenLabsAsteriskBridge;

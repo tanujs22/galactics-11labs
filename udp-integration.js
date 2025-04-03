@@ -1,348 +1,84 @@
-// UDP-based SIP integration with ElevenLabs
-const SipClientAlternative = require('./sip-client-alternative');
-const { startCallingStream } = require('./calling');
+// Updated udp-integration.js with multi-call support using SessionManager
+const SessionManager = require('./sessionManager'); // ✅ Corrected typo
 require('dotenv').config();
 
-// Re-enable console logs
-// console.log = () => { }
+const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS || '100', 10);
+const BASE_PORT = parseInt(process.env.BASE_PORT || '5100', 10);
+const AGENT_ID = process.env.ELEVENLABS_AGENT_ID;
 
 class UdpElevenLabsAsteriskBridge {
   constructor() {
-    // Print banner to indicate which implementation is running
     console.log('*********************************************************');
-    console.log('* STARTING ELEVENLABS BRIDGE WITH UDP-BASED SIP CLIENT *');
-    console.log('* For calls to extension 222 on Asterisk               *');
+    console.log('* MULTI-CALL ELEVENLABS BRIDGE WITH UDP-BASED SIP CLIENT *');
+    console.log('* Supports concurrent calls to extension 222             *');
     console.log('*********************************************************');
-    
-    this.sipClient = new SipClientAlternative();
-    this.elevenlabsConnection = null;
-    this.callActive = false;
+
+    this.sessionManager = new SessionManager({
+      basePort: BASE_PORT,
+      maxSessions: MAX_SESSIONS,
+      agentId: AGENT_ID
+    });
   }
 
   async initialize() {
-    try {
-      // Initialize SIP client
-      console.log('Initializing UDP SIP client...');
-
-      // Environment info
-      console.log(`SIP Server: ${process.env.SIP_SERVER || 'default'}`);
-      console.log(`Local Port: ${process.env.LOCAL_PORT || '5080'}`);
-      console.log(`SIP Extension: ${process.env.SIP_USERNAME || '7001'}`);
-      
-      // Initialize with extended debug
-      const initResult = await this.sipClient.initialize();
-      if (!initResult) {
-        throw new Error('SIP client initialization failed');
-      }
-      
-      // Set up SIP client event handlers
-      this.setupSipEventHandlers();
-      
-      console.log('Initialization complete. Ready for calls.');
-      console.log('Call this extension from Zoiper/Asterisk: 222');
-      return true;
-    } catch (error) {
-      console.error('Initialization error:', error);
-      return false;
-    }
+    console.log(`[INIT] SIP Server: ${process.env.SIP_SERVER || 'default'}`);
+    console.log(`[INIT] SIP Base Port: ${BASE_PORT}`);
+    console.log(`[INIT] Max Sessions: ${MAX_SESSIONS}`);
+    console.log(`[INIT] ElevenLabs Agent ID: ${AGENT_ID}`);
+    console.log('[INIT] Session Manager initialized. Ready for incoming calls.');
+    return true;
   }
 
-  setupSipEventHandlers() {
-    // Handle incoming calls
-    this.sipClient.onCallReceived = (invitation) => {
-      console.log('***** INCOMING CALL RECEIVED *****');
-      console.log('Call info:', JSON.stringify(invitation));
-      
-      // Ensure we're not already connected
-      this.disconnectFromElevenLabs();
-      
-      console.log('Connecting to ElevenLabs for incoming call...');
-      this.connectToElevenLabs();
-    };
-    
-    // Handle call end
-    this.sipClient.onCallEnded = () => {
-      console.log('Call ended, disconnecting from ElevenLabs...');
-      this.disconnectFromElevenLabs();
-    };
-    
-    // Handle audio from the SIP call
-    this.sipClient.onAudioReceived = (audioData) => {
-      // Simple log for receiving audio
-      if (!this.receivedAudioCount) {
-        this.receivedAudioCount = 0;
-        console.log('[BRIDGE] FIRST audio packet received from SIP call');
-      }
-      this.receivedAudioCount++;
-      
-      // Only log occasionally to avoid flooding
-      if (this.receivedAudioCount % 50 === 0) {
-        console.log(`[BRIDGE] Audio received from SIP call (packet #${this.receivedAudioCount})`);
-      }
-      
-      if (!this.elevenlabsConnection) {
-        console.warn('[BRIDGE] Received audio but ElevenLabs connection not available');
+  async handleIncomingCall(inviteRequest) {
+    try {
+      const callId = inviteRequest?.headers?.['call-id'];
+      const toUri = inviteRequest?.headers?.to?.uri || '';
+      const extension = toUri.match(/\d+/)?.[0] || '7001';
+
+      if (!callId) {
+        console.warn('[WARN] Incoming call has no call-id, skipping');
         return;
       }
-      
-      if (!this.elevenlabsConnection.handleIncomingAudio) {
-        console.warn('[BRIDGE] Received audio but ElevenLabs handler not available');
-        return;
-      }
-      
-      try {
-        // Send audio from Asterisk to ElevenLabs without any processing
-        if (this.receivedAudioCount % 50 === 0) {
-          console.log(`[BRIDGE] Forwarding audio to ElevenLabs (packet #${this.receivedAudioCount})`);
-        }
-        this.elevenlabsConnection.handleIncomingAudio({
-          media: { payload: audioData }
-        });
-      } catch (err) {
-        console.error('[BRIDGE] Error sending audio to ElevenLabs:', err);
-      }
-    };
-  }
 
-  connectToElevenLabs() {
-    try {
-      console.log('Connecting to ElevenLabs...');
-
-      // Print out all relevant environment variables for debugging
-      console.log('******* ENVIRONMENT CONFIGURATION *******');
-      console.log(`SIP_SERVER: ${process.env.SIP_SERVER}`);
-      console.log(`SIP_USERNAME: ${process.env.SIP_USERNAME}`);
-      console.log(`SIP_PORT: ${process.env.SIP_PORT}`);
-      console.log(`LOCAL_PORT: ${process.env.LOCAL_PORT}`);
-      console.log(`ELEVENLABS_AGENT_ID: ${process.env.ELEVENLABS_AGENT_ID}`);
-      console.log('***************************************');
-      
-      const agentId = process.env.ELEVENLABS_AGENT_ID || "gjaoeyb4H5TTw7NA0mub";
-      console.log(`Using ElevenLabs Agent ID: ${agentId}`);
-      
-      const { ws, handleIncomingAudio, closeSession } = startCallingStream({
-        agentId,
-        onSend: (responsePayload) => {
-          try {
-            if (responsePayload.event === 'media') {
-              // Send audio from ElevenLabs to Asterisk
-              if (!responsePayload.media || !responsePayload.media.payload) {
-                console.warn('[BRIDGE] Received media event from ElevenLabs but no payload');
-                return;
-              }
-              
-              const audioPayload = responsePayload.media.payload;
-              
-              // Simple counter for ElevenLabs audio packets with minimal logging
-              if (!this.elAudioCount) {
-                this.elAudioCount = 0;
-                console.log(`[BRIDGE] FIRST AUDIO PACKET FROM ELEVENLABS`);
-              }
-              this.elAudioCount++;
-              
-              // Only log very occasionally to avoid impacting real-time performance
-              if (this.elAudioCount % 1000 === 0) {
-                console.log(`[BRIDGE] Processed ${this.elAudioCount} audio packets from ElevenLabs`);
-              }
-              
-              // Send the audio directly to Asterisk without any processing or logging
-              // This is the critical real-time audio path
-              if (this.elAudioCount % 100 === 0) {
-                console.log(`[BRIDGE] Sending audio packet #${this.elAudioCount} to SIP client`);
-              }
-              
-              // Log the first few packets in detail to help with debugging
-              if (this.elAudioCount <= 5) {
-                const rawAudio = Buffer.from(audioPayload, 'base64');
-                console.log(`[BRIDGE] Audio packet #${this.elAudioCount} - Length: ${rawAudio.length} bytes`);
-                console.log(`[BRIDGE] Audio packet #${this.elAudioCount} - First 20 bytes: ${rawAudio.slice(0, 20).toString('hex')}`);
-              }
-              
-              const success = this.sipClient.sendAudio(audioPayload);
-              if (!success && this.elAudioCount % 10 === 0) {
-                console.error(`[BRIDGE] Failed to send audio packet #${this.elAudioCount} to SIP client`);
-              }
-            } else if (responsePayload.event === 'agent_response') {
-              // Log the agent's text response
-              console.log(`[ElevenLabs Agent] ${responsePayload.agent_response_event?.agent_response || '[No text]'}`);
-            } else if (responsePayload.event === 'interruption') {
-              // Handle interruption event from ElevenLabs
-              console.log('[ElevenLabs] Interruption detected - user is speaking');
-              
-              // Clear the audio buffer in the SIP client to stop playback immediately
-              if (this.sipClient && this.sipClient.audio) {
-                console.log('[BRIDGE] Clearing audio buffer due to interruption');
-                this.sipClient.audio = Buffer.alloc(0);
-              }
-            } else if (responsePayload.event !== 'ping') {
-              // Log other non-ping events
-              console.log(`[ElevenLabs Event] ${responsePayload.event}`);
-            }
-          } catch (err) {
-            console.error('[BRIDGE] Error handling ElevenLabs response:', err);
-            console.error(err.stack);
-          }
-        }
-      });
-      
-      // Store the connection
-      this.elevenlabsConnection = {
-        ws,
-        handleIncomingAudio,
-        closeSession
-      };
-      
-      console.log('==== Successfully Connected to ElevenLabs ====');
-      console.log('Call is now active - audio should flow between Asterisk and ElevenLabs');
-      this.callActive = true;
-      
-      // Send a test message to ElevenLabs to get it to start talking
-      // This simulates the first audio from the user to kickstart the conversation
-      setTimeout(() => {
-        // Create a simple text message for ElevenLabs
-        console.log('[BRIDGE] Sending simulated greeting to ElevenLabs to start conversation');
-        
-        // We can't directly send text to ElevenLabs through the current API
-        // But we can simulate receiving audio from the user
-        // In a real system, you might want to use a different approach
-        const testAudioPayload = Buffer.from("Hello ElevenLabs, this is a test call.").toString('base64');
-        
-        // Send the test audio to ElevenLabs
-        if (this.elevenlabsConnection && this.elevenlabsConnection.handleIncomingAudio) {
-          this.elevenlabsConnection.handleIncomingAudio({
-            media: { payload: testAudioPayload }
-          });
-          console.log('[BRIDGE] Sent initial greeting to ElevenLabs');
-        }
-      }, 1000); // Wait 1 second to make sure connection is fully established
-      
-      return true;
-    } catch (error) {
-      console.error('Error connecting to ElevenLabs:', error);
-      return false;
-    }
-  }
-
-  disconnectFromElevenLabs() {
-    if (!this.elevenlabsConnection) {
-      console.log('No active ElevenLabs connection to disconnect');
-      return;
-    }
-    
-    try {
-      console.log('Disconnecting from ElevenLabs...');
-      
-      if (this.elevenlabsConnection.closeSession) {
-        this.elevenlabsConnection.closeSession();
-        this.sipClient.rtpSequence = 0;
-        this.sipClient.rtpTimestamp = 0;
-      }
-      
-      this.elevenlabsConnection = null;
-      this.callActive = false;
-      
-      console.log('Disconnected from ElevenLabs');
-    } catch (error) {
-      console.error('Error disconnecting from ElevenLabs:', error);
-    }
-  }
-
-  async makeCall(destination) {
-    if (this.callActive) {
-      console.warn('Call already in progress');
-      return false;
-    }
-    
-    try {
-      console.log(`Making call to ${destination}...`);
-      
-      // Make the call
-      const callResult = await this.sipClient.makeCall(destination);
-      
-      if (callResult) {
-        console.log('Call connected, connecting to ElevenLabs...');
-        this.connectToElevenLabs();
-      }
-      
-      return callResult;
-    } catch (error) {
-      console.error('Error making call:', error);
-      return false;
-    }
-  }
-
-  async endCurrentCall() {
-    try {
-      console.log('Ending current call...');
-      
-      // Disconnect from ElevenLabs
-      this.disconnectFromElevenLabs();
-      
-      // End the SIP call
-      await this.sipClient.endCall();
-      this.sipClient.rtpSequence = 0;
-      this.sipClient.rtpTimestamp = 0;
-      
-      console.log('Call ended');
-      return true;
-    } catch (error) {
-      console.error('Error ending call:', error);
-      return false;
+      console.log(`[CALL] New incoming call: Call-ID=${callId}, Extension=${extension}`);
+      await this.sessionManager.handleNewCall({ callId, extension });
+    } catch (err) {
+      console.error('[ERROR] Failed to handle incoming call:', err);
     }
   }
 
   async shutdown() {
-    try {
-      // End any active call
-      if (this.callActive) {
-        await this.endCurrentCall();
-      }
-      
-      // Shut down SIP client
-      await this.sipClient.shutdown();
-      
-      console.log('Shutdown complete');
-    } catch (error) {
-      console.error('Error during shutdown:', error);
-    }
+    await this.sessionManager.shutdownAll();
+    console.log('[SHUTDOWN] All active sessions have been terminated');
   }
 }
 
-// Example usage
+// Runner
 async function main() {
   const bridge = new UdpElevenLabsAsteriskBridge();
-  
-  // Handle shutdown signals
+
   process.on('SIGINT', async () => {
-    console.log('Shutting down...');
+    console.log('[SIGINT] Shutting down gracefully...');
     await bridge.shutdown();
     process.exit(0);
   });
-  
-  // Initialize the bridge
+
   const initialized = await bridge.initialize();
-  
   if (!initialized) {
-    console.error('Failed to initialize, exiting...');
+    console.error('[FATAL] Failed to initialize bridge. Exiting...');
     process.exit(1);
   }
-  
-  console.log('Bridge initialized and ready for calls');
-  
-  // If a destination is provided as a command line argument, make a call
-  const destination = process.argv[2];
-  if (destination) {
-    console.log(`Making call to ${destination}...`);
-    await bridge.makeCall(destination);
-  } else {
-    console.log('Waiting for incoming calls...');
-  }
+
+  // Manual test or integration point with your SIP dispatcher
+  // Example:
+  // bridge.handleIncomingCall({ headers: { 'call-id': 'abc123', to: { uri: 'sip:222@yourdomain.com' } } });
+
+  console.log('[READY] Bridge initialized. Awaiting incoming calls...');
 }
 
-// Run the main function
 if (require.main === module) {
   main().catch(err => {
-    console.error('Unhandled error:', err);
+    console.error('[FATAL] Unhandled error in bridge runtime:', err);
     process.exit(1);
   });
 }
